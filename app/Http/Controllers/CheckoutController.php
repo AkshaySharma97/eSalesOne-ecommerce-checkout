@@ -16,11 +16,17 @@ class CheckoutController extends Controller
 {
     public function index(Request $request)
     {
-        $product = Product::with('inventories')->first();
-        $variant = $request->get('variant');
-        $quantity = $request->get('quantity', 1);
+        $cart = session('cart', []);
+    
+        if (empty($cart)) {
+            return redirect('/')->with('error', 'Your cart is empty.');
+        }
 
-        return view('checkout', compact('product', 'variant', 'quantity'));
+        $total = collect($cart)->sum(function ($item) {
+            return $item['price'] * $item['quantity'];
+        });
+
+        return view('checkout', compact('cart', 'total'));
     }
 
     public function store(Request $request)
@@ -36,57 +42,70 @@ class CheckoutController extends Controller
             'card_number' => 'required|digits:16',
             'expiry' => 'required|date|after:today',
             'cvv' => 'required|digits:3',
-            'variant' => 'required|string',
-            'quantity' => 'required|integer|min:1',
         ]);
 
-        // Simulate payment outcomes
-        $cvv_code = $request->cvv;
+        $cart = session('cart', []);
 
-        $status = match ($cvv_code) {
-            '1' => 'approved',
-            '2' => 'declined',
-            '3' => 'failed',
+        if (empty($cart)) {
+            return redirect()->back()->with('error', 'Cart is empty. Please add products before checkout.');
+        }
+
+        // Simulate payment outcome via CVV
+        $status = match ($request->cvv) {
+            '111' => 'approved',
+            '222' => 'declined',
+            '333' => 'failed',
             default => 'approved',
         };
 
         // Create order
         $order = Order::create([
-            'order_number' => Str::uuid(),
-            'full_name' => $request->full_name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'address' => $request->address,
-            'city' => $request->city,
-            'state' => $request->state,
-            'zip' => $request->zip,
+            'order_number' => uniqid('ORD-'),
+            'full_name' => $validated['full_name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'],
+            'address' => $validated['address'],
+            'city' => $validated['city'],
+            'state' => $validated['state'],
+            'zip' => $validated['zip'],
             'status' => $status,
         ]);
 
-        $product = Product::first();
-        $price = $product->price;
-        $quantity = $request->quantity;
+        // Process each cart item
+        foreach ($cart as $item) {
+            $inventory = Inventory::where('product_id', $item['product_id'])
+                ->where('variant', $item['variant'])
+                ->first();
 
-        OrderItem::create([
-            'order_id' => $order->id,
-            'product_id' => $product->id,
-            'variant' => $request->variant,
-            'quantity' => $quantity,
-            'price' => $price,
-        ]);
+            if ($inventory) {
+                if ($inventory->quantity < $item['quantity']) {
+                    return redirect()->back()->with('error', "Insufficient stock for {$item['title']} - {$item['variant']}.");
+                }
 
-        // Decrease inventory
-        Inventory::where('product_id', $product->id)
-            ->where('variant', $request->variant)
-            ->decrement('quantity', $quantity);
+                $inventory->decrement('quantity', $item['quantity']);
+            }
 
-        // Send email
-        if ($status === 'approved') {
-            Mail::to($order->email)->send(new OrderConfirmation($order));
-        } else {
-            Mail::to($order->email)->send(new OrderFailure($order));
+            OrderItem::create([
+                'order_id' => $order->id,
+                'product_id' => $item['product_id'],
+                'variant' => $item['variant'],
+                'quantity' => $item['quantity'],
+                'price' => $item['price'] * $item['quantity'], // Total price for the item
+            ]);
         }
 
+        // Clear cart session
+        session()->forget('cart');
+
+        // Send email via Mailtrap
+        if ($status === 'approved') {
+            Mail::to($order->email)->send(new \App\Mail\OrderConfirmation($order));
+        } else {
+            Mail::to($order->email)->send(new \App\Mail\OrderFailure($order));
+        }
+
+        // Redirect to Thank You page
         return redirect()->to('/thank-you/' . $order->id);
     }
+
 }

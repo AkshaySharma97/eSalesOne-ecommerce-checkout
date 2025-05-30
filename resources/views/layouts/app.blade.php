@@ -13,6 +13,19 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
     <div class="container">
         <a class="navbar-brand" href="{{ url('/') }}">Ecommerce Store</a>
+        <ul>
+            <li class="nav-item position-relative">
+                <a href="{{ route('cart.show') }}" class="nav-link">
+                    🛒
+                    @php $cartCount = count(session('cart', [])); @endphp
+                    @if($cartCount)
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            {{ $cartCount }}
+                        </span>
+                    @endif
+                </a>
+            </li>
+        </ul>
     </div>
 </nav>
 
@@ -28,6 +41,14 @@
             </ul>
         </div>
     </div>
+    @endif
+    @if(session('success'))
+        <div class="toast align-items-center text-white bg-success border-0 position-fixed top-0 end-0 m-3 show" role="alert" style="z-index:1051">
+            <div class="d-flex">
+                <div class="toast-body">{{ session('success') }}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
     @endif
     @yield('content')
 </div>

@@ -25,19 +25,42 @@
                 <p class="card-text text-truncate" style="max-height: 3em;">{{ $product->description }}</p>
                 <p class="fw-bold mb-3">₹{{ number_format($product->price) }}</p>
 
-                <form action="{{ url('/checkout') }}" method="GET" class="mt-auto">
+                <form method="POST" action="" class="mt-auto product-action-form">
+                    @csrf
+                    <input type="hidden" name="product_id" value="{{ $product->id }}">
+
                     <div class="mb-2">
+                        <label class="form-label">Variant</label>
                         <select name="variant" class="form-select" required>
                             <option value="">Select Variant</option>
                             @foreach($product->inventories as $inv)
-                            <option value="{{ $inv->variant }}">{{ $inv->variant }}</option>
+                                <option value="{{ $inv->variant }}">{{ $inv->variant }}</option>
                             @endforeach
                         </select>
                     </div>
+
                     <div class="mb-2">
+                        <label class="form-label">Quantity</label>
                         <input type="number" name="quantity" class="form-control" value="1" min="1" max="10" required>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Buy Now</button>
+
+                    <div class="d-grid gap-2">
+                        <button
+                            type="submit"
+                            class="btn btn-outline-primary w-100"
+                            data-action="{{ route('cart.add') }}"
+                        >
+                            Add to Cart
+                        </button>
+
+                        <button
+                            type="submit"
+                            class="btn btn-success w-100"
+                            data-action="{{ route('checkout.quick') }}"
+                        >
+                            Buy Now
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -50,4 +73,34 @@
     {!! $products->withQueryString()->links('pagination::bootstrap-5') !!}
 </div>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Loop over all forms
+    document.querySelectorAll('.product-action-form').forEach(form => {
+        const variantSelect = form.querySelector('select[name="variant"]');
+        const buttons = form.querySelectorAll('button');
+
+        // Disable buttons by default
+        buttons.forEach(btn => btn.disabled = true);
+
+        // Enable buttons when variant is selected
+        variantSelect.addEventListener('change', function () {
+            const hasValue = variantSelect.value !== '';
+            buttons.forEach(btn => btn.disabled = !hasValue);
+        });
+
+        // Add click event to each button
+        buttons.forEach(button => {
+            button.addEventListener('click', function (e) {
+                e.preventDefault(); // prevent default form submission
+                form.action = this.getAttribute('data-action'); // set action dynamically
+                form.submit();
+            });
+        });
+    });
+});
+</script>
+
+
 @endsection
+
